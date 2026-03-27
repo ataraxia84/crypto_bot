@@ -29,12 +29,14 @@ class CryptoPriceBot:
         
         # Default cryptocurrencies to track (can be modified)
         self.default_coins = [
-            "bitcoin",
-            "ethereum", 
-            "solana",
-            "cardano",
-            "dogecoin",
-            "monero"
+            "bitcoin",      # BTC  
+            "ethereum",     # ETH
+            "solana",       # SOL
+            "cardano",      # ADA
+            "dogecoin",     # DOGE
+            "monero",       # XMR - NUEVO
+            "ripple",       # XRP - NUEVO
+            "litecoin"      # LTC - NUEVO
         ]
         
     def send_telegram_message(self, message: str) -> bool:
@@ -132,6 +134,35 @@ class CryptoPriceBot:
         except Exception as e:
             logger.error(f"Failed to fetch historical price for {coin_id}: {e}")
             return None
+
+    def fetch_monero_price(self) -> Optional[Dict]:
+    """Fetch Monero price specifically using /simple/price endpoint"""
+    try:
+        url = "https://api.coingecko.com/api/v3/simple/price"
+        params = {
+            "ids": "monero",
+            "vs_currencies": "usd",
+            "include_24hr_change": "true",
+            "include_7d_change": "true"
+        }
+        
+        response = requests.get(url, params=params, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        
+        if "monero" in data:
+            return {
+                "name": "Monero",
+                "symbol": "xmr",
+                "current_price": data["monero"].get("usd"),
+                "price_change_1h": None,  # 1h no disponible en simple/price
+                "price_change_24h": data["monero"].get("usd_24h_change"),
+                "price_change_7d": data["monero"].get("usd_7d_change")
+            }
+        return None
+    except Exception as e:
+        logger.error(f"Failed to fetch Monero: {e}")
+        return None
     
     def format_price_message(self, coin_data: Dict) -> str:
         """Format price data into a nice Telegram message"""
@@ -192,31 +223,36 @@ class CryptoPriceBot:
             logger.error(f"Failed to save cache: {e}")
     
     def run(self, coins: Optional[List[str]] = None) -> bool:
-        """Main execution function"""
-        if coins is None:
-            coins = self.default_coins
+    if coins is None:
+        coins = self.default_coins
+    
+    logger.info(f"Fetching prices for {len(coins)} cryptocurrencies...")
+    
+    successful = 0
+    messages = []
+    
+    for coin in coins:
+        logger.info(f"Fetching data for {coin}...")
         
-        logger.info(f"Fetching prices for {len(coins)} cryptocurrencies...")
-        
-        successful = 0
-        messages = []
-        
-        for coin in coins:
-            logger.info(f"Fetching data for {coin}...")
+        # Monero necesita tratamiento especial
+        if coin == "monero":
+            data = self.fetch_monero_price()
+        else:
             data = self.fetch_price_data(coin)
-            
-            if data and data.get("current_price"):
-                message = self.format_price_message(data)
-                messages.append(message)
-                successful += 1
-                logger.info(f"✓ Successfully fetched {coin}")
-            else:
-                messages.append(f"❌ Failed to fetch data for {coin}")
-                logger.error(f"✗ Failed to fetch {coin}")
-            
-            # Small delay to avoid rate limiting
-            import time
-            time.sleep(1)
+        
+        if data and data.get("current_price"):
+            message = self.format_price_message(data)
+            messages.append(message)
+            successful += 1
+            logger.info(f"✓ Successfully fetched {coin}")
+        else:
+            messages.append(f"❌ Failed to fetch data for {coin}")
+            logger.error(f"✗ Failed to fetch {coin}")
+        
+        import time
+        time.sleep(1)
+    
+    # ... resto del código igual
         
         # Combine all messages
         full_message = "🚀 <b>Crypto Price Update</b>\n" + "-" * 30 + "\n\n"

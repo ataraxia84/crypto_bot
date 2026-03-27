@@ -1,0 +1,68 @@
+name: Telegram Crypto Price Bot
+
+on:
+  schedule:
+    # Corre a las 00:05, 12:05 y 21:05 UTC
+    - cron: '5 0,12,21 * * *'
+  
+  # Allows manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      coins:
+        description: 'Custom coins (comma-separated, e.g., bitcoin,ethereum,solana)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  send-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        cd bot
+        pip install -r requirements.txt
+    
+    - name: Run crypto price bot
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        CRYPTO_COINS: ${{ inputs.coins || secrets.CRYPTO_COINS || '' }}
+      run: |
+        cd bot
+        python crypto_bot.py
+    
+    - name: Upload logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: bot-logs
+        path: |
+          bot/*.log
+          bot/price_cache.json
+        retention-days: 3
+    
+    - name: Send failure notification (optional)
+      if: failure()
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: |
+        cd bot
+        python -c "
+        import os, requests
+        msg = '❌ Crypto bot failed to run. Check GitHub Actions logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+        url = f'https://api.telegram.org/bot{os.environ[\"TELEGRAM_BOT_TOKEN\"]}/sendMessage'
+        requests.post(url, json={'chat_id': os.environ['TELEGRAM_CHAT_ID'], 'text': msg})
+        "

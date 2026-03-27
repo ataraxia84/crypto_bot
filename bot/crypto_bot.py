@@ -9,6 +9,7 @@ import sys
 import json
 import logging
 import requests
+import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 import traceback
@@ -136,33 +137,35 @@ class CryptoPriceBot:
             return None
 
     def fetch_monero_price(self) -> Optional[Dict]:
-    """Fetch Monero price specifically using /simple/price endpoint"""
-    try:
-        url = "https://api.coingecko.com/api/v3/simple/price"
-        params = {
-            "ids": "monero",
-            "vs_currencies": "usd",
-            "include_24hr_change": "true",
-            "include_7d_change": "true"
-        }
-        
-        response = requests.get(url, params=params, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        
-        if "monero" in data:
-            return {
-                "name": "Monero",
-                "symbol": "xmr",
-                "current_price": data["monero"].get("usd"),
-                "price_change_1h": None,  # 1h no disponible en simple/price
-                "price_change_24h": data["monero"].get("usd_24h_change"),
-                "price_change_7d": data["monero"].get("usd_7d_change")
+        """Fetch Monero price specifically using /simple/price endpoint"""
+        try:
+            url = "https://api.coingecko.com/api/v3/simple/price"
+            params = {
+                "ids": "monero",
+                "vs_currencies": "usd",
+                "include_24hr_change": "true",
+                "include_7d_change": "true"
             }
-        return None
-    except Exception as e:
-        logger.error(f"Failed to fetch Monero: {e}")
-        return None
+            
+            response = requests.get(url, params=params, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+            
+            if "monero" in data:
+                return {
+                    "name": "Monero",
+                    "symbol": "xmr",
+                    "current_price": data["monero"].get("usd"),
+                    "price_change_1h": None,  # 1h no disponible en simple/price
+                    "price_change_24h": data["monero"].get("usd_24h_change"),
+                    "price_change_7d": data["monero"].get("usd_7d_change"),
+                    "market_cap": None,
+                    "volume_24h": None
+                }
+            return None
+        except Exception as e:
+            logger.error(f"Failed to fetch Monero: {e}")
+            return None
     
     def format_price_message(self, coin_data: Dict) -> str:
         """Format price data into a nice Telegram message"""
@@ -223,36 +226,34 @@ class CryptoPriceBot:
             logger.error(f"Failed to save cache: {e}")
     
     def run(self, coins: Optional[List[str]] = None) -> bool:
-    if coins is None:
-        coins = self.default_coins
-    
-    logger.info(f"Fetching prices for {len(coins)} cryptocurrencies...")
-    
-    successful = 0
-    messages = []
-    
-    for coin in coins:
-        logger.info(f"Fetching data for {coin}...")
+        """Main execution function"""
+        if coins is None:
+            coins = self.default_coins
         
-        # Monero necesita tratamiento especial
-        if coin == "monero":
-            data = self.fetch_monero_price()
-        else:
-            data = self.fetch_price_data(coin)
+        logger.info(f"Fetching prices for {len(coins)} cryptocurrencies...")
         
-        if data and data.get("current_price"):
-            message = self.format_price_message(data)
-            messages.append(message)
-            successful += 1
-            logger.info(f"✓ Successfully fetched {coin}")
-        else:
-            messages.append(f"❌ Failed to fetch data for {coin}")
-            logger.error(f"✗ Failed to fetch {coin}")
+        successful = 0
+        messages = []
         
-        import time
-        time.sleep(1)
-    
-    # ... resto del código igual
+        for coin in coins:
+            logger.info(f"Fetching data for {coin}...")
+            
+            # Monero necesita tratamiento especial
+            if coin == "monero":
+                data = self.fetch_monero_price()
+            else:
+                data = self.fetch_price_data(coin)
+            
+            if data and data.get("current_price"):
+                message = self.format_price_message(data)
+                messages.append(message)
+                successful += 1
+                logger.info(f"✓ Successfully fetched {coin}")
+            else:
+                messages.append(f"❌ Failed to fetch data for {coin}")
+                logger.error(f"✗ Failed to fetch {coin}")
+            
+            time.sleep(1)
         
         # Combine all messages
         full_message = "🚀 <b>Crypto Price Update</b>\n" + "-" * 30 + "\n\n"

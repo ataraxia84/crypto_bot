@@ -1,9 +1,9 @@
 name: Telegram Crypto Price Bot
 
 on:
-  schedule:
-    # Corre a las 00:05, 12:05 y 21:05 UTC
-    - cron: '5 0,12,21 * * *'
+  #schedule:
+  #  # Corre a las 00:05, 12:05 y 21:05 UTC
+  #  - cron: '5 0,12,21 * * *'
   
   # Allows manual trigger from GitHub UI
   workflow_dispatch:
